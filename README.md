@@ -22,6 +22,7 @@ jenkins-remote-api
 ### Changelog
 
 * v1.0 - Versão inicial.
+* v1.1 - Adicionado contexto de ajuda help().
 
 ### Observações
 
