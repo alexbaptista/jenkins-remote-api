@@ -5,21 +5,24 @@
 #
 # -----------------------------------------------------------------------------
 # * Requisitos:
-# - Credencial de acesso ao jenkins (Usuário e Token/Senha)
-# - Job configurado com token para execução remota
-# - Opcional: Job configurado para não permitir concorrência de execução
+#
+# - Credencial de acesso ao jenkins (Usuário e Token/Senha) - https://www.cloudbees.com/blog/api-token-jenkins-rest-api
+# - Job configurado com token para execução remota - https://wiki.jenkins-ci.org/display/JENKINS/Build+Token+Root+Plugin
+# - Opcional: Job configurado para não permitir concorrência de execução (Opção: Do not allow concurrent builds)
 #
 # * Funções:
-# - startBuild() - Realiza o start do job e retorna o número do build gerado
+#
+# - startBuild() - Função para realizar o start remoto do job e obter o número gerado.
+# - statusBuild(<NUMERO_DO_JOB>) - Função para realizar a consulta do status de um job.
+# - cancelBuild(<NUMERO_DO_JOB>) - Função para realizar o cancelamento de um job em andamento (necessário desabilitar a proteção CSRF - https://wiki.jenkins-ci.org/display/JENKINS/CSRF+Protection)
 #
 # * Config de valores para execução do script:
 #
-# Exemplo:
-# Jenkins_url="meujenkins.com.br:port"
-# Job_name="ave_ridicula"
-# Job_token=""
-# User_api="ave"
-# User_token=""
+# - Jenkins_url="meujenkins.com.br:port"
+# - Job_name="ave_ridicula"
+# - Job_token="fr@ng0"
+# - User_api="ave"
+# - User_token="@ver1d1cul@"
 
 Jenkins_host=""
 Job_name=""
@@ -27,36 +30,30 @@ Job_token=""
 User_api=""
 User_token=""
 
-# startBuild() - Função para realizar o start remoto do job e obter o número gerado
+# startBuild() - Função para realizar o start remoto do job e obter o número gerado.
 # Sobre:
 # Após o request de start, é validado o status http (201), para então obter o número gerado na "QUEUE" do jenkins.
 # Com base no número da "QUEUE", é realizado um novo request HTTP (200) para obter o "NUMBER" do job gerado.
-# OBS: Para este segundo request, temos de aguardar +5 segundos para que o Jenkins possa criar o NUMBER para o job, ou retornar se há outro job em execução
 
 function startBuild() {
-  echo "Requesting ..."
-  response=$(curl -i -s -m 5 --netrc -X GET "http://$Jenkins_host/job/$Job_name/build?token=$Job_token" --user "$User_api:$User_token")
+  response=$(curl -i -s -m 5 --netrc -X GET "http://$Jenkins_host/job/$Job_name/build?token=$Job_token&delay=0" --user "$User_api:$User_token")
   http_code=$(echo "$response" | grep HTTP | awk '{print $2}')
 
   if [[ $http_code == '201' ]]
   then
-    echo "Getting job status ..."
     number_queue=$(echo "$response" | grep Location | cut -d\/ -f6)
-    status_queue=$(sleep 8;curl -i -s -m 5 --netrc -X GET "http://$Jenkins_host/queue/item/$number_queue/api/json?pretty=true" --user "$User_api:$User_token")
+    status_queue=$(curl -i -s -m 5 --netrc -X GET "http://$Jenkins_host/queue/item/$number_queue/api/json?pretty=true" --user "$User_api:$User_token")
     http_code=$(echo "$status_queue" | grep HTTP | awk '{print $2}')
 
     if [[ $http_code == '200' ]]
     then
-        if [[ $status_queue == *"\"blocked\" : true"* ]]
-        then
-          echo "Error starting ..."
-          echo "$status_queue" |  grep '"why"' | cut -d\" -f4
-          exit 1
-        else
-          echo "Created number job:"
-          echo "$status_queue" |  grep '"number"' | awk '{print $3}' | sed 's/,//g'
-        fi
-
+      if [[ $status_queue == *"\"blocked\" : true"* ]]
+      then
+        echo "$status_queue" |  grep '"why"' | cut -d\" -f4
+        exit 1
+      else
+        echo "$status_queue" |  grep '"number"' | awk '{print $3}' | sed 's/,//g'
+      fi
     elif [[ ! -z $http_code && $http_code != '200' ]]
     then
       echo "Error - $http_code - check queue number configuration";
@@ -76,6 +73,84 @@ function startBuild() {
   fi
 }
 
+# statusBuild(<NUMERO_DO_JOB>) - Função para realizar a consulta do status de um job.
+# Sobre:
+# Recebe como parâmetro o número do JOB, inicialmente valida se é um número válido,
+# posteriormente segue com o request, valida o http code (200),
+# depois valida se o job está em execução ou se já terminou, retornando um dos status:
+# SUCCESS, ABORTED, FAILURE, UNSTABLE ou BUILDING
+
+function statusBuild() {
+  integer='^[0-9]+$'
+  number_job=$1
+
+  if [[ $number_job =~ $integer ]]
+  then
+    response=$(curl -i -s -m 5 --netrc -X GET "http://$Jenkins_host/job/$Job_name/$number_job/api/json?pretty=true" --user "$User_api:$User_token")
+    http_code=$(echo "$response" | grep HTTP | awk '{print $2}')
+
+    if [[ $http_code == '200' ]]
+    then
+      if [[ $response == *"\"building\" : true"* ]]
+      then
+        echo "BUILDING"
+      else
+        echo "$response" | grep '"result"' | cut -d\" -f4
+      fi
+
+    elif [[ ! -z $http_code && $http_code != '200' ]]
+    then
+      echo "Error - $http_code - check job number configuration";
+      exit 1
+    else
+      echo "Error - time-out or invalid host - '$Jenkins_host'"
+      exit 1
+    fi
+  else
+    echo "Error - Not valid job number value"
+    exit 1
+  fi
+}
+
+# cancelBuild(<NUMERO_DO_JOB>) - Função para realizar o cancelamento de um job em andamento
+# Sobre:
+# Recebe como parâmetro o número do JOB, inicialmente valida se é um número válido,
+# posteriormente segue com o request, valida o http code (302).
+
+function cancelBuild() {
+  integer='^[0-9]+$'
+  number_job=$1
+
+  if [[ $number_job =~ $integer ]]
+  then
+    response=$(curl -i -s -m 5 --netrc -X POST "http://$Jenkins_host/job/$Job_name/$number_job/stop?token=$Job_token&delay=0" --user "$User_api:$User_token")
+    http_code=$(echo "$response" | grep HTTP | awk '{print $2}')
+
+    if [[ $http_code == '302' ]]
+    then
+      echo "STOPPED"
+
+    elif [[ ! -z $http_code && $http_code != '200' ]]
+    then
+      echo "Error - $http_code - check job number configuration";
+      exit 1
+    else
+      echo "Error - time-out or invalid host - '$Jenkins_host'"
+      exit 1
+    fi
+  else
+    echo "Error - Not valid job number value"
+    exit 1
+  fi
+}
+
+function help() {
+  echo HELP
+}
+
 case $1 in
   start) startBuild;;
+  status) statusBuild $2;;
+  cancel) cancelBuild $2;;
+  *) help;;
 esac
