@@ -21,6 +21,7 @@
 # * Changelog:
 #
 # - v1.0 - Versão inicial.
+# - v1.1 - Adicionado contexto de ajuda help()
 #
 # * Observações:
 #
@@ -161,7 +162,20 @@ function cancelBuild() {
 }
 
 function help() {
-  echo HELP
+  cat<<-EOM
+
+  NOME
+      jenkinsAPI.sh
+
+  RESUMO
+      Realiza a inicialização e obtém status remotamente de um job cadastrado no Jenkins
+
+  DESCRIÇÃO
+      jenkinsAPI.sh start - Realiza o start remoto do job e retorna o número gerado.
+      jenkinsAPI.sh status <NUMERO_DO_JOB> - Consulta do status de um job.
+      jenkinsAPI.sh cancel <NUMERO_DO_JOB> - Cancelamento de um job em andamento
+
+EOM
 }
 
 case $1 in
