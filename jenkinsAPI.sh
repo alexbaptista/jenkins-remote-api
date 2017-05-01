@@ -6,6 +6,8 @@
 # -----------------------------------------------------------------------------
 # * Requisitos:
 #
+# - bash (unix shell)
+# - curl
 # - Credencial de acesso ao jenkins (Usuário e Token/Senha) - https://www.cloudbees.com/blog/api-token-jenkins-rest-api
 # - Job configurado com token para execução remota - https://wiki.jenkins-ci.org/display/JENKINS/Build+Token+Root+Plugin
 # - Opcional: Job configurado para não permitir concorrência de execução (Opção: Do not allow concurrent builds)
@@ -14,8 +16,22 @@
 #
 # - startBuild() - Função para realizar o start remoto do job e obter o número gerado.
 # - statusBuild(<NUMERO_DO_JOB>) - Função para realizar a consulta do status de um job.
-# - cancelBuild(<NUMERO_DO_JOB>) - Função para realizar o cancelamento de um job em andamento (necessário desabilitar a proteção CSRF - https://wiki.jenkins-ci.org/display/JENKINS/CSRF+Protection)
+# - cancelBuild(<NUMERO_DO_JOB>) - Função para realizar o cancelamento de um job em andamento
 #
+# * Changelog:
+#
+# - v1.0 - Versão inicial.
+#
+# * Observações:
+#
+# - Realizar o start do job, e obter o número do job gerado pelo request, por meio da QUEUE do Jenkins
+#   https://issues.jenkins-ci.org/browse/JENKINS-12827
+# - Realizar o start dos jobs sem delay
+#   https://issues.jenkins-ci.org/browse/JENKINS-356
+# - Para usar a função de cancelar, foi implementado o método POST atendendo os critérios do CSRF por default habilitado no Jenkins
+#   https://wiki.jenkins-ci.org/display/JENKINS/CSRF+Protection
+#   https://wiki.jenkins-ci.org/display/JENKINS/Remote+access+API#RemoteaccessAPI-CSRFProtection
+
 # * Config de valores para execução do script:
 #
 # - Jenkins_url="meujenkins.com.br:port"
@@ -123,13 +139,13 @@ function cancelBuild() {
 
   if [[ $number_job =~ $integer ]]
   then
-    response=$(curl -i -s -m 5 --netrc -X POST "http://$Jenkins_host/job/$Job_name/$number_job/stop?token=$Job_token&delay=0" --user "$User_api:$User_token")
+    jenkins_crumb=$(curl -s -X GET "http://$Jenkins_host/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,%22:%22,//crumb)" --user "$User_api:$User_token")
+    response=$(curl -i -s -m 5 --netrc -H "$jenkins_crumb" -X POST "http://$Jenkins_host/job/$Job_name/$number_job/stop?token=$Job_token&delay=0" --user "$User_api:$User_token")
     http_code=$(echo "$response" | grep HTTP | awk '{print $2}')
 
     if [[ $http_code == '302' ]]
     then
       echo "STOPPED"
-
     elif [[ ! -z $http_code && $http_code != '200' ]]
     then
       echo "Error - $http_code - check job number configuration";
