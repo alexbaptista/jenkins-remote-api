@@ -14,7 +14,7 @@
 #
 # * Funções:
 #
-# - startBuild() - Função para realizar o start remoto do job e obter o número gerado.
+# - startBuild(<PARAMETRO> ou nulo) - Função para realizar o start remoto do job (parametrizado ou não) e obter o número gerado.
 # - statusBuild(<NUMERO_DO_JOB>) - Função para realizar a consulta do status de um job.
 # - cancelBuild(<NUMERO_DO_JOB>) - Função para realizar o cancelamento de um job em andamento
 #
@@ -47,19 +47,31 @@ Job_token=""
 User_api=""
 User_token=""
 
-# startBuild() - Função para realizar o start remoto do job e obter o número gerado.
+# Opcional - Defina o nome da variável do JOB caso seja parametrizado
+Job_parameter_name=""
+
+# startBuild(<PARAMETRO> ou nulo) - Função para realizar o start remoto do job (parametrizado ou não) e obter o número gerado.
+# Obs: Atende para jobs parametrizados, somente 1 valor como variável (chave=valor)
 # Sobre:
 # Após o request de start, é validado o status http (201), para então obter o número gerado na "QUEUE" do jenkins.
 # Com base no número da "QUEUE", é realizado um novo request HTTP (200) para obter o "NUMBER" do job gerado.
 
 function startBuild() {
-  response=$(curl -i -s -m 5 --netrc -X GET "http://$Jenkins_host/job/$Job_name/build?token=$Job_token&delay=0" --user "$User_api:$User_token")
+  parameter=$1
+
+  if [[ ! -z $parameter ]]
+  then
+    response=$(curl -i -s -m 5 --netrc -X GET "http://$Jenkins_host/job/$Job_name/buildWithParameters?token=$Job_token&$Job_parameter_name=$parameter&delay=0" --user "$User_api:$User_token")
+  else
+    response=$(curl -i -s -m 5 --netrc -X GET "http://$Jenkins_host/job/$Job_name/build?token=$Job_token&delay=0" --user "$User_api:$User_token")
+  fi
+
   http_code=$(echo "$response" | grep HTTP | awk '{print $2}')
 
   if [[ $http_code == '201' ]]
   then
     number_queue=$(echo "$response" | grep Location | cut -d\/ -f6)
-    status_queue=$(curl -i -s -m 5 --netrc -X GET "http://$Jenkins_host/queue/item/$number_queue/api/json?pretty=true" --user "$User_api:$User_token")
+    status_queue=$(sleep 3;curl -i -s -m 5 --netrc -X GET "http://$Jenkins_host/queue/item/$number_queue/api/json?pretty=true" --user "$User_api:$User_token")
     http_code=$(echo "$status_queue" | grep HTTP | awk '{print $2}')
 
     if [[ $http_code == '200' ]]
@@ -171,7 +183,7 @@ function help() {
       Realiza a inicialização e obtém status remotamente de um job cadastrado no Jenkins
 
   DESCRIÇÃO
-      jenkinsAPI.sh start - Realiza o start remoto do job e retorna o número gerado.
+      jenkinsAPI.sh start <PARAMETRO> ou nulo - Realiza o start remoto do job (parametrizado ou não) e retorna o número gerado.
       jenkinsAPI.sh status <NUMERO_DO_JOB> - Consulta do status de um job.
       jenkinsAPI.sh cancel <NUMERO_DO_JOB> - Cancelamento de um job em andamento
 
@@ -179,7 +191,7 @@ EOM
 }
 
 case $1 in
-  start) startBuild;;
+  start) startBuild $2;;
   status) statusBuild $2;;
   cancel) cancelBuild $2;;
   *) help;;
