@@ -22,6 +22,8 @@
 #
 # - v1.0 - Versão inicial.
 # - v1.1 - Adicionado contexto de ajuda help()
+# - v1.2 - Suporte á JOB parametrizado (somente 1 variável)
+# - v1.3 - Adicionado método de log das requisições curl
 #
 # * Observações:
 #
@@ -66,12 +68,17 @@ function startBuild() {
     response=$(curl -i -s -m 5 --netrc -X GET "http://$Jenkins_host/job/$Job_name/build?token=$Job_token&delay=0" --user "$User_api:$User_token")
   fi
 
+  saveLog 'START' "$response"
+
   http_code=$(echo "$response" | grep HTTP | awk '{print $2}')
 
   if [[ $http_code == '201' ]]
   then
     number_queue=$(echo "$response" | grep Location | cut -d\/ -f6)
     status_queue=$(sleep 3;curl -i -s -m 5 --netrc -X GET "http://$Jenkins_host/queue/item/$number_queue/api/json?pretty=true" --user "$User_api:$User_token")
+
+    saveLog 'START-QUEUE' "$status_queue"
+
     http_code=$(echo "$status_queue" | grep HTTP | awk '{print $2}')
 
     if [[ $http_code == '200' ]]
@@ -118,6 +125,8 @@ function statusBuild() {
     response=$(curl -i -s -m 5 --netrc -X GET "http://$Jenkins_host/job/$Job_name/$number_job/api/json?pretty=true" --user "$User_api:$User_token")
     http_code=$(echo "$response" | grep HTTP | awk '{print $2}')
 
+    saveLog 'STATUS' "$response"
+
     if [[ $http_code == '200' ]]
     then
       if [[ $response == *"\"building\" : true"* ]]
@@ -154,6 +163,9 @@ function cancelBuild() {
   then
     jenkins_crumb=$(curl -s -X GET "http://$Jenkins_host/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,%22:%22,//crumb)" --user "$User_api:$User_token")
     response=$(curl -i -s -m 5 --netrc -H "$jenkins_crumb" -X POST "http://$Jenkins_host/job/$Job_name/$number_job/stop?token=$Job_token&delay=0" --user "$User_api:$User_token")
+
+    saveLog 'CANCEL' "$response"
+
     http_code=$(echo "$response" | grep HTTP | awk '{print $2}')
 
     if [[ $http_code == '302' ]]
@@ -173,6 +185,16 @@ function cancelBuild() {
   fi
 }
 
+function saveLog() {
+  type=$1
+  log=$2
+  yymmdd=$(date +%Y-%m-%d)
+  mkdir -p logs
+  echo "[$type] - $(date) ==========================================" >> logs/api_$yymmdd.log
+  echo $log >> logs/api_$yymmdd.log
+  echo "" >> logs/api_$yymmdd.log
+}
+
 function help() {
   cat<<-EOM
 
@@ -190,9 +212,14 @@ function help() {
 EOM
 }
 
+function version() {
+  echo "v1.3"
+}
+
 case $1 in
   start) startBuild $2;;
   status) statusBuild $2;;
   cancel) cancelBuild $2;;
+  --version) version;;
   *) help;;
 esac

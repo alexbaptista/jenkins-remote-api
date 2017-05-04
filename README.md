@@ -23,7 +23,8 @@ jenkins-remote-api
 
 * v1.0 - Versão inicial.
 * v1.1 - Adicionado contexto de ajuda help().
-* v1.2 - Suporte á JOB parametrizado (somente 1 variável)
+* v1.2 - Suporte á JOB parametrizado (somente 1 variável).
+* v1.3 - Adicionado método de log das requisições curl.
 
 ### Observações
 
