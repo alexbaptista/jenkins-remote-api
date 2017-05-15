@@ -15,7 +15,7 @@ jenkins-remote-api
 
 ### Funções
 
-* ```startBuild(<PARAMETRO> ou nulo)``` - Função para realizar o start remoto do job (parametrizado ou não) e obter o número gerado.
+* ```startBuild(<PARAMETRO> ou nulo)``` - Função para realizar o start remoto do job (parametrizado ou não) e obter o status.
 * ```statusBuild(<NUMERO_DO_JOB>)``` - Função para realizar a consulta do status de um job.
 * ```cancelBuild(<NUMERO_DO_JOB>)``` - Função para realizar o cancelamento de um job em andamento
 
@@ -25,6 +25,7 @@ jenkins-remote-api
 * v1.1 - Adicionado contexto de ajuda help().
 * v1.2 - Suporte á JOB parametrizado (somente 1 variável).
 * v1.3 - Adicionado método de log das requisições curl.
+* v1.4 - Adicionado método de consulta após o inicio do job, a função start apenas concluiu com um status de job
 
 ### Observações
 

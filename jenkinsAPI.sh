@@ -14,7 +14,7 @@
 #
 # * Funções:
 #
-# - startBuild(<PARAMETRO> ou nulo) - Função para realizar o start remoto do job (parametrizado ou não) e obter o número gerado.
+# - startBuild(<PARAMETRO> ou nulo) - Função para realizar o start remoto do job (parametrizado ou não) e obter o status.
 # - statusBuild(<NUMERO_DO_JOB>) - Função para realizar a consulta do status de um job.
 # - cancelBuild(<NUMERO_DO_JOB>) - Função para realizar o cancelamento de um job em andamento
 #
@@ -24,6 +24,7 @@
 # - v1.1 - Adicionado contexto de ajuda help()
 # - v1.2 - Suporte á JOB parametrizado (somente 1 variável)
 # - v1.3 - Adicionado método de log das requisições curl
+# - v1.4 - Adicionado método de consulta após o inicio do job, a função start apenas concluiu com um status de job
 #
 # * Observações:
 #
@@ -43,20 +44,21 @@
 # - User_api="ave"
 # - User_token="@ver1d1cul@"
 
-Jenkins_host=""
-Job_name=""
-Job_token=""
-User_api=""
-User_token=""
+Jenkins_host="cpro37908.publiccloud.com.br"
+Job_name="Java_Pipe"
+Job_token="636f0a114d4258f230e0ef76dd3eb727"
+User_api="devops"
+User_token="Q!W@E#zaxscd"
 
 # Opcional - Defina o nome da variável do JOB caso seja parametrizado
-Job_parameter_name=""
+Job_parameter_name="TAG"
 
 # startBuild(<PARAMETRO> ou nulo) - Função para realizar o start remoto do job (parametrizado ou não) e obter o número gerado.
 # Obs: Atende para jobs parametrizados, somente 1 valor como variável (chave=valor)
 # Sobre:
 # Após o request de start, é validado o status http (201), para então obter o número gerado na "QUEUE" do jenkins.
 # Com base no número da "QUEUE", é realizado um novo request HTTP (200) para obter o "NUMBER" do job gerado.
+# Após isso é realizado a consulta para obter o status do JOB
 
 function startBuild() {
   parameter=$1
@@ -88,7 +90,18 @@ function startBuild() {
         echo "$status_queue" |  grep '"why"' | cut -d\" -f4
         exit 1
       else
-        echo "$status_queue" |  grep '"number"' | awk '{print $3}' | sed 's/,//g'
+        number_created=$(echo "$status_queue" |  grep '"number"' | awk '{print $3}' | sed 's/,//g')
+
+        while true;
+        do
+          status_number=$(sleep 5;statusBuild $number_created)
+          if [[ "$status_number" != 'BUILDING' ]]
+          then
+              echo "$status_number"
+              exit 0
+          fi
+        done
+
       fi
     elif [[ ! -z $http_code && $http_code != '200' ]]
     then
@@ -205,7 +218,7 @@ function help() {
       Realiza a inicialização e obtém status remotamente de um job cadastrado no Jenkins
 
   DESCRIÇÃO
-      jenkinsAPI.sh start <PARAMETRO> ou nulo - Realiza o start remoto do job (parametrizado ou não) e retorna o número gerado.
+      jenkinsAPI.sh start <PARAMETRO> ou nulo - Realiza o start remoto do job (parametrizado ou não) e retorna o status.
       jenkinsAPI.sh status <NUMERO_DO_JOB> - Consulta do status de um job.
       jenkinsAPI.sh cancel <NUMERO_DO_JOB> - Cancelamento de um job em andamento
 
@@ -213,7 +226,7 @@ EOM
 }
 
 function version() {
-  echo "v1.3"
+  echo "v1.4"
 }
 
 case $1 in
